@@ -1,2 +1,3 @@
 # OTUS-MSSQL-Eremin
-Домашние задания по курсу MS SQL Server от OTUS
+Домашние задания курса OTUS "MS SQL Server Developer".
+Группа 2022-09.
