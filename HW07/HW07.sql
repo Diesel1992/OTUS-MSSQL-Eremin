@@ -81,6 +81,7 @@ UNPIVOT (AddresLine FOR AddressType IN (
 	PostalAddressLine1, 
 	PostalAddressLine2)) AS UnpivotTable 
 ORDER BY CustomerName, AddressType
+
 /*
 3. В таблице стран (Application.Countries) есть поля с цифровым кодом страны и с буквенным.
 Сделайте выборку ИД страны, названия и ее кода так, 
@@ -116,32 +117,18 @@ ORDER BY CountryID, CodeType
 В результатах должно быть ид клиета, его название, ид товара, цена, дата покупки.
 */
 
-; WITH MostExpensiveItems AS (
-	SELECT 
-		Customers.CustomerID,
-		Customers.CustomerName,
+SELECT CustomerID, CustomerName, StockItemID, UnitPrice, InvoiceDate
+FROM Sales.Customers
+OUTER APPLY (
+	SELECT
 		StockItemID,
 		UnitPrice,
 		Invoices.InvoiceDate,
-		ROW_NUMBER() OVER(PARTITION BY Customers.CustomerID ORDER BY UnitPrice DESC) RN_MostExpensive,
-		RANK() OVER(PARTITION BY Customers.CustomerID ORDER BY UnitPrice DESC) RNK_MostExpensive,
-		DENSE_RANK() OVER(PARTITION BY Customers.CustomerID ORDER BY UnitPrice DESC) DRNK_MostExpensive
+		ROW_NUMBER() OVER(ORDER BY UnitPrice DESC) RN_MostExpensive,
+		RANK() OVER(ORDER BY UnitPrice DESC) RNK_MostExpensive,
+		DENSE_RANK() OVER(ORDER BY UnitPrice DESC) DRNK_MostExpensive
 	FROM Sales.Invoices
 	JOIN Sales.InvoiceLines ON InvoiceLines.InvoiceID = Invoices.InvoiceID
-	JOIN Sales.Customers ON Customers.CustomerID = Invoices.CustomerID),
-Top2MostExpensiveItems AS (
-	SELECT 
-		CustomerID,
-		CustomerName,
-		StockItemID,
-		UnitPrice,
-		InvoiceDate,
-		DRNK_MostExpensive AS RN
-	FROM MostExpensiveItems
-	WHERE (DRNK_MostExpensive <= 2) AND (RN_MostExpensive = RNK_MostExpensive))
-
-SELECT CustomerID, CustomerName, [1] MostExpensive1, [2] MostExpensive2 
-FROM Top2MostExpensiveItems
-PIVOT (SUM(UnitPrice) FOR RN IN ([1], [2])) AS PivotTable 
-ORDER BY CustomerName, ISNULL([1], [2]) DESC
-
+	WHERE Invoices.CustomerID = Customers.CustomerID) MostExpensive
+WHERE (DRNK_MostExpensive <= 2) AND (RN_MostExpensive = RNK_MostExpensive)
+ORDER BY CustomerName, DRNK_MostExpensive
