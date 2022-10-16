@@ -141,6 +141,7 @@ ORDER BY CityName, CityID, PickerName
 -- Напишите ваши рассуждения по поводу оптимизации. 
 
 -- 5. Объясните, что делает и оптимизируйте запрос
+SET STATISTICS IO, TIME ON
 
 SELECT 
 	Invoices.InvoiceID, 

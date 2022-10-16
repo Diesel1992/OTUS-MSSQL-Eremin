@@ -83,6 +83,15 @@ FROM InvoiceDays
 JOIN MonthRunningTotals ON DATEDIFF(MONTH, 0, InvoiceDate) = Months
 ORDER BY InvoiceDate
 
+SELECT
+	Invoices.InvoiceDate, 
+	(SUM(line.Quantity * line.UnitPrice)) as InvoiceSum, 
+	SUM(SUM(line.Quantity * line.UnitPrice)) OVER(ORDER BY EOMONTH(Invoices.InvoiceDate) RANGE UNBOUNDED PRECEDING) as RunningTotal
+FROM Sales.Invoices
+JOIN Sales.InvoiceLines as line on Invoices.InvoiceID=line.InvoiceID
+WHERE Invoices.InvoiceDate >= '20150101'
+GROUP BY InvoiceDate
+ORDER BY InvoiceDate
 /*
 3. Вывести список 2х самых популярных продуктов (по количеству проданных) 
 в каждом месяце за 2016 год (по 2 самых популярных продукта в каждом месяце).
@@ -99,7 +108,8 @@ ORDER BY InvoiceDate
 	JOIN Warehouse.StockItems ON InvoiceLines.StockItemID = StockItems.StockItemID
 	JOIN Sales.Invoices ON InvoiceLines.InvoiceID = Invoices.InvoiceID
 	WHERE InvoiceDate BETWEEN '2016-01-01' AND '2016-12-31'
-	GROUP BY MONTH(InvoiceDate), StockItems.StockItemName)
+	GROUP BY MONTH(InvoiceDate), StockItems.StockItemName
+	)
 SELECT [MonthName], StockItemName, [MonthQuantity]
 FROM MonthItemQuantity
 WHERE RowNumber <= 2
