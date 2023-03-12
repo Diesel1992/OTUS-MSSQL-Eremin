@@ -7,7 +7,11 @@ CREATE TABLE PassEvent (Id bigint IDENTITY NOT NULL, PassTypeId varchar(30) NOT 
 CREATE TABLE PassSource (Id int IDENTITY NOT NULL, Name nvarchar(30) NOT NULL UNIQUE, Description nvarchar(255) NULL, PRIMARY KEY CLUSTERED (Id));
 CREATE TABLE PassType (Id varchar(30) NOT NULL, Name nvarchar(50) NOT NULL UNIQUE, Description nvarchar(255) NULL, PRIMARY KEY CLUSTERED (Id));
 CREATE TABLE Permission (Id int IDENTITY NOT NULL, PermissionTypeId varchar(30) NOT NULL, IsActive bit DEFAULT 1 NOT NULL, PRIMARY KEY CLUSTERED (Id));
-CREATE TABLE PermissionToAccessADepartment (DepartmentId int NOT NULL, PermissionId int NOT NULL UNIQUE, Recursive bit DEFAULT 1 NOT NULL, PRIMARY KEY CLUSTERED (DepartmentId, PermissionId));
+
+-- Создавая кластерный индекс по отделу, мы быстро найдём разрешения, имеющие доступ к отделу.
+CREATE TABLE PermissionToAccessADepartment (DepartmentId int NOT NULL, PermissionId int NOT NULL UNIQUE, Recursive bit DEFAULT 1 NOT NULL, PRIMARY KEY CLUSTERED (DepartmentId, PermissionId)); 
+
+ -- Создавая кластерный индекс по человеку, мы быстро найдём разрешения, имеющие доступ к человеку.
 CREATE TABLE PermissionToAccessAPerson (PersonId int NOT NULL, PermissionId int NOT NULL UNIQUE, PRIMARY KEY CLUSTERED (PersonId, PermissionId));
 CREATE TABLE PermissionType (Id varchar(30) NOT NULL, Name nvarchar(30) NOT NULL UNIQUE, Description nvarchar(255) NULL, PRIMARY KEY CLUSTERED (Id));
 CREATE TABLE Person (Id int IDENTITY NOT NULL, FirstName nvarchar(30) NOT NULL, LastName nvarchar(30) NOT NULL, Phone varchar(16) NULL, PRIMARY KEY CLUSTERED (Id));
@@ -18,14 +22,24 @@ CREATE TABLE SetOfPermissionIncludePermission (PermissionId int NOT NULL, SetOfP
 CREATE TABLE SetOfPermissionIncludeRoleInfo (SetOfPermissionsId int NOT NULL, RoleInfoId varchar(30) NOT NULL, PRIMARY KEY (SetOfPermissionsId, RoleInfoId));
 CREATE TABLE SetOfPermissions (Id int IDENTITY NOT NULL, PersonId int NOT NULL, Name nvarchar(50) NOT NULL, IsActive bit DEFAULT 1 NOT NULL, PRIMARY KEY CLUSTERED (Id), CONSTRAINT UniqueNameForPerson UNIQUE (PersonId, Name));
 CREATE TABLE UserInfo (PersonId int NOT NULL, UserLogin varchar(255) NOT NULL, UserPassword varchar(255) NOT NULL, IsActive bit DEFAULT 1 NOT NULL, PRIMARY KEY CLUSTERED (PersonId));
+
+-- Нужен для построения иерархии отделов через CTE
 CREATE INDEX Department_ParentDepartmentId ON Department (ParentDepartmentId);
+-- Нужен для поиска каналов оповещения для человека 
 CREATE INDEX NotificationChannel_PersonId ON NotificationChannel (PersonId);
+-- Нужен для выборки на текущий день, неделю, месяц
 CREATE INDEX PassEvent_PassDateTime ON PassEvent (PassDateTime);
+-- Нужен для выборки посещений для определённого человека
 CREATE INDEX PassEvent_PersonId ON PassEvent (PersonId);
+-- Нужен, чтобы исключить повтор телефонов, если он задан
 CREATE UNIQUE NONCLUSTERED INDEX Person ON Person (Phone) WHERE Phone IS NOT NULL;
+-- Нужен для поиска человека по фамилии
 CREATE INDEX Person_LastName ON Person (LastName);
+-- Нужен для поиска разрешений для человека
 CREATE INDEX SetOfPermissions_PersonId ON SetOfPermissions (PersonId);
+-- Логин не должен повторяться
 CREATE UNIQUE INDEX UserInfo_UserLogin ON UserInfo (UserLogin);
+
 ALTER TABLE PermissionToAccessAPerson ADD CONSTRAINT FKPermission795882 FOREIGN KEY (PermissionId) REFERENCES Permission (Id);
 ALTER TABLE PermissionToAccessADepartment ADD CONSTRAINT FKPermission781867 FOREIGN KEY (PermissionId) REFERENCES Permission (Id);
 ALTER TABLE SetOfPermissionIncludeRoleInfo ADD CONSTRAINT FKSetOfPermi200389 FOREIGN KEY (SetOfPermissionsId) REFERENCES SetOfPermissions (Id);
