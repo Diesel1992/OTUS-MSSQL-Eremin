@@ -319,6 +319,9 @@ INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (4, 'Родител�
 INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (5, '7 классы', 3);
 INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (6, '7Б', 5);
 INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (7, 'Кружок рисования', 3);
+INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (8, '11 классы', 3);
+INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (9, '11А', 8);
+INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (10, '11Б', null);
 SET IDENTITY_INSERT Department OFF;
 INSERT INTO PersonBelongToDepartment(PersonId, DepartmentId) VALUES (1, 1);
 INSERT INTO PersonBelongToDepartment(PersonId, DepartmentId) VALUES (1, 4);
