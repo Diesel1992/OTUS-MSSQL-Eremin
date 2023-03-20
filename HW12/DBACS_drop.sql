@@ -1,5 +1,7 @@
 DROP TRIGGER NotificationStatusUpdateTrigger;
 GO
+DROP PROCEDURE FillPassEventForPerson;
+GO
 ALTER TABLE PermissionToAccessADepartment DROP CONSTRAINT FKPermission781867;
 ALTER TABLE SetOfPermissionsIncludeRoleInfo DROP CONSTRAINT FKSetOfPermi691630;
 ALTER TABLE RoleInfoIncludePermission DROP CONSTRAINT FKRoleInfoIn46240;
@@ -27,6 +29,7 @@ ALTER TABLE PermissionToAccessAPerson DROP CONSTRAINT FKPermission795882;
 ALTER TABLE PermissionToAccessAPerson DROP CONSTRAINT PersonOfPermission;
 ALTER TABLE NotificationChannel DROP CONSTRAINT FKNotificati678673;
 ALTER TABLE NotificationError DROP CONSTRAINT FKNotificati393333;
+DROP VIEW PassStatistic;
 DROP VIEW NotificationChannelForPersonPass;
 DROP VIEW SetOfPermissionsHasActiveAccessToPerson;
 DROP VIEW SetOfPermissionsHasAccessToPerson;

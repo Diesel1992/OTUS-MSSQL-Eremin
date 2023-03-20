@@ -1,0 +1,8 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<RptDataSource xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Name="ACS">
+  <ConnectionProperties>
+    <Extension>SQL</Extension>
+    <ConnectString>Data Source=localhost;Initial Catalog=ACS</ConnectString>
+  </ConnectionProperties>
+  <DataSourceID>16df4afa-ca65-4646-b6d3-b3bba646dd6f</DataSourceID>
+</RptDataSource>

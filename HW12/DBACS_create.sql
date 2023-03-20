@@ -248,6 +248,32 @@ from SetOfPermissionsHasActiveAccessToPerson P2P
 join NotificationChannel NotCh on NotCh.SetOfPermissionsId = P2P.SetOfPermissionsId
 where NotCh.IsActive = 1;
 GO
+CREATE VIEW PassStatistic AS
+with AllDays as (
+  select distinct Cast(PassDateTime as date) PassDate
+  from PassEvent
+)
+
+select Depts.Id DeptId
+, Depts.ParentDepartmentId
+, Depts.Recursive DeptRecursive
+, Depts.Name DeptName
+, AllDays.PassDate
+, Count(distinct PassEvent.PersonId) IncomedPeopleCount
+, Count(distinct PersDept.PersonId) AllPeopleCount
+, Cast(Round(100.0 * Count(distinct PassEvent.PersonId) / Count(distinct PersDept.PersonId), 0) as Int) IncomedPercent
+from Person
+join PersonBelongToDepartment PersDept on PersDept.PersonId = Person.Id 
+join DeptartmentsWithRecursive Depts on Depts.Id = PersDept.DepartmentId
+cross join AllDays
+left join PassEvent on PassEvent.PersonId = Person.Id and Cast(PassDateTime as date) = AllDays.PassDate
+left join PassType on PassEvent.PassTypeId = PassType.Id
+group by Depts.Id
+, Depts.ParentDepartmentId
+, Depts.Recursive
+, Depts.Name
+, AllDays.PassDate;
+GO
 CREATE INDEX Department_ParentDepartmentId 
   ON Department (ParentDepartmentId);
 CREATE INDEX NotificationChannel_SetOfPermissionsId 
@@ -285,6 +311,29 @@ ALTER TABLE PermissionToAccessAPerson ADD CONSTRAINT FKPermission795882 FOREIGN 
 ALTER TABLE PermissionToAccessAPerson ADD CONSTRAINT PersonOfPermission FOREIGN KEY (PersonId) REFERENCES Person (Id);
 ALTER TABLE NotificationChannel ADD CONSTRAINT FKNotificati678673 FOREIGN KEY (SetOfPermissionsId) REFERENCES SetOfPermissions (Id);
 ALTER TABLE NotificationError ADD CONSTRAINT FKNotificati393333 FOREIGN KEY (NotificationId) REFERENCES Notification (Id);
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'FillPassEventForPerson') AND type in (N'P', N'PC')) DROP PROCEDURE FillPassEventForPerson;
+GO
+CREATE PROCEDURE FillPassEventForPerson @PersonId int, @PassSourceId int, @DaysCount int
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON
+
+	Declare @DaysInserted int = 0
+	while @DaysInserted < @DaysCount
+	begin
+	  insert into PassEvent (PersonId
+	  , PassSourceId
+	  , PassTypeId
+	  , PassDateTime
+	  )
+	  values (@PersonId, @PassSourceId, 'SuccIn', DateAdd(hour, 8, cast(DateAdd(day, -@DaysInserted, cast(GetDate() as Date)) as datetime)))
+	  , (@PersonId, @PassSourceId, 'SuccOut', DateAdd(hour, 14, cast(DateAdd(day, -@DaysInserted, cast(GetDate() as Date)) as datetime)))
+	  Set @DaysInserted = @DaysInserted + 1
+	end
+END;
+GO
 IF EXISTS (SELECT * FROM sys.triggers WHERE object_id = OBJECT_ID(N'NotificationStatusUpdateTrigger')) DROP TRIGGER NotificationStatusUpdateTrigger;
 GO
 create trigger NotificationStatusUpdateTrigger on Notification after insert, update as
@@ -312,16 +361,16 @@ INSERT INTO PermissionType(Id, Name, Description) VALUES ('AddPeople', 'Внес
 INSERT INTO PermissionType(Id, Name, Description) VALUES ('AddDepts', 'Внесение новых отделов', null);
 INSERT INTO PermissionType(Id, Name, Description) VALUES ('GrantPerson', 'Предоставление доступа', 'Предоставление человеку доступа к другому человеку, к которому у самого есть доступ через отдел');
 SET IDENTITY_INSERT Department ON;
-INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (1, 'Персонал школы', null);
+INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (1, 'Школа', null);
 INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (2, 'Учителя', 1);
-INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (3, 'Ученики', null);
-INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (4, 'Родители', null);
+INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (3, 'Ученики', 1);
+INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (4, 'Родители', 1);
 INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (5, '7 классы', 3);
 INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (6, '7Б', 5);
 INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (7, 'Кружок рисования', 3);
 INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (8, '11 классы', 3);
 INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (9, '11А', 8);
-INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (10, '11Б', null);
+INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (10, '11Б', 8);
 SET IDENTITY_INSERT Department OFF;
 INSERT INTO PersonBelongToDepartment(PersonId, DepartmentId) VALUES (1, 1);
 INSERT INTO PersonBelongToDepartment(PersonId, DepartmentId) VALUES (1, 4);

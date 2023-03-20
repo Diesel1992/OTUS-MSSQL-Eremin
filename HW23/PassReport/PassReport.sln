@@ -1,0 +1,30 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.3.32825.248
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{F14B399A-7131-4C87-9E4B-1186C45EF12D}") = "Статистика посещений", "Статистика посещений\Статистика посещений.rptproj", "{77558786-C45E-4B05-B7B7-BE7BFA978128}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Default = Debug|Default
+		DebugLocal|Default = DebugLocal|Default
+		Release|Default = Release|Default
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{77558786-C45E-4B05-B7B7-BE7BFA978128}.Debug|Default.ActiveCfg = Debug
+		{77558786-C45E-4B05-B7B7-BE7BFA978128}.Debug|Default.Build.0 = Debug
+		{77558786-C45E-4B05-B7B7-BE7BFA978128}.Debug|Default.Deploy.0 = Debug
+		{77558786-C45E-4B05-B7B7-BE7BFA978128}.DebugLocal|Default.ActiveCfg = DebugLocal
+		{77558786-C45E-4B05-B7B7-BE7BFA978128}.DebugLocal|Default.Build.0 = DebugLocal
+		{77558786-C45E-4B05-B7B7-BE7BFA978128}.Release|Default.ActiveCfg = Release
+		{77558786-C45E-4B05-B7B7-BE7BFA978128}.Release|Default.Build.0 = Release
+		{77558786-C45E-4B05-B7B7-BE7BFA978128}.Release|Default.Deploy.0 = Release
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {F44EB5BE-B785-499C-9C46-FB2B4097CB4D}
+	EndGlobalSection
+EndGlobal

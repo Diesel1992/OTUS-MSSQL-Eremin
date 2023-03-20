@@ -233,3 +233,19 @@ begin
   CLOSE PassEventCursor;  
   DEALLOCATE PassEventCursor;  
 end
+
+-- Заполняем таблицу проходов
+exec FillPassEventForPerson @PersonId = 3, @PassSourceId = 1, @DaysCount = 14
+
+-- Получаем статистику
+declare @StartDate date = DateAdd(day, -6, getdate()) 
+declare @RootDeptId int = 1
+
+select DeptName [Класс]
+, PassDate [Дата]
+, IncomedPeopleCount [Количество посетивших людей]
+, AllPeopleCount [Общее количество людей]
+, IncomedPercent [Процент посетивших людей] 
+from PassStatistic
+where (ParentDepartmentId = @RootDeptId or DeptId = @RootDeptId)
+  and PassDate >= @StartDate

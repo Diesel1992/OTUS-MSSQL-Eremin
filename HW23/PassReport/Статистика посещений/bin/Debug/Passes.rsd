@@ -1,0 +1,54 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<SharedDataSet xmlns="http://schemas.microsoft.com/sqlserver/reporting/2010/01/shareddatasetdefinition" xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner">
+  <DataSet Name="DataSet1">
+    <Query>
+      <DataSourceReference>ACS</DataSourceReference>
+      <DataSetParameters>
+        <DataSetParameter Name="@RootDeptId">
+          <DefaultValue>1</DefaultValue>
+          <ReadOnly>false</ReadOnly>
+          <Nullable>false</Nullable>
+          <OmitFromQuery>false</OmitFromQuery>
+          <rd:DbType>Int32</rd:DbType>
+        </DataSetParameter>
+        <DataSetParameter Name="@StartDate">
+          <DefaultValue>=DateAdd(DateInterval.Day, -6, Today)</DefaultValue>
+          <ReadOnly>false</ReadOnly>
+          <Nullable>false</Nullable>
+          <OmitFromQuery>false</OmitFromQuery>
+          <rd:DbType>DateTime</rd:DbType>
+        </DataSetParameter>
+      </DataSetParameters>
+      <CommandText>select DeptName [Класс]
+, PassDate [Дата]
+, IncomedPeopleCount [Количество посетивших людей]
+, AllPeopleCount [Общее количество людей]
+, IncomedPercent [Процент посетивших людей] 
+from PassStatistic
+where (ParentDepartmentId = @RootDeptId or DeptId = @RootDeptId)
+  and PassDate &gt;= @StartDate</CommandText>
+    </Query>
+    <Fields>
+      <Field Name="Класс">
+        <DataField>Класс</DataField>
+        <rd:TypeName>System.String</rd:TypeName>
+      </Field>
+      <Field Name="Дата">
+        <DataField>Дата</DataField>
+        <rd:TypeName>System.DateTime</rd:TypeName>
+      </Field>
+      <Field Name="Количество_посетивших_людей">
+        <DataField>Количество посетивших людей</DataField>
+        <rd:TypeName>System.Int32</rd:TypeName>
+      </Field>
+      <Field Name="Общее_количество_людей">
+        <DataField>Общее количество людей</DataField>
+        <rd:TypeName>System.Int32</rd:TypeName>
+      </Field>
+      <Field Name="Процент_посетивших_людей">
+        <DataField>Процент посетивших людей</DataField>
+        <rd:TypeName>System.Int32</rd:TypeName>
+      </Field>
+    </Fields>
+  </DataSet>
+</SharedDataSet>
