@@ -1,4 +1,4 @@
-CREATE TABLE SetOfPermissionIncludeRoleInfo (
+CREATE TABLE SetOfPermissionsIncludeRoleInfo (
   RoleInfoId         varchar(30) NOT NULL, 
   SetOfPermissionsId int NOT NULL, 
   PRIMARY KEY CLUSTERED (RoleInfoId, 
@@ -8,7 +8,7 @@ CREATE TABLE RoleInfoIncludePermission (
   RoleInfoId   varchar(30) NOT NULL, 
   PRIMARY KEY CLUSTERED (PermissionId, 
   RoleInfoId));
-CREATE TABLE SetOfPermissionIncludePermission (
+CREATE TABLE SetOfPermissionsIncludePermission (
   PermissionId       int NOT NULL, 
   SetOfPermissionsId int NOT NULL, 
   PRIMARY KEY CLUSTERED (PermissionId, 
@@ -40,7 +40,7 @@ CREATE TABLE FingerPrint (
 CREATE TABLE NotificationChannel (
   Id                        int IDENTITY NOT NULL, 
   NotificationChannelTypeId varchar(30) NOT NULL, 
-  PersonId                  int NOT NULL, 
+  SetOfPermissionsId        int NOT NULL, 
   IsActive                  bit DEFAULT 1 NOT NULL, 
   ChannelParams             nvarchar(255) NOT NULL, 
   PRIMARY KEY CLUSTERED (Id));
@@ -109,8 +109,9 @@ CREATE TABLE UserInfo (
 CREATE TABLE Notification (
   Id                    int IDENTITY NOT NULL, 
   PassEventId           bigint NOT NULL, 
-  NotificationStatusId  varchar(30) NOT NULL, 
+  NotificationStatusId  varchar(30) DEFAULT 'Waiting' NOT NULL, 
   NotificationChannelId int NOT NULL, 
+  StatusUpdateTime      datetime2(0) DEFAULT GetDate() NOT NULL, 
   PRIMARY KEY CLUSTERED (Id));
 CREATE TABLE NotificationStatus (
   Id          varchar(30) NOT NULL, 
@@ -119,14 +120,164 @@ CREATE TABLE NotificationStatus (
   PRIMARY KEY CLUSTERED (Id));
 CREATE TABLE Person (
   Id        int IDENTITY NOT NULL, 
-  FirstName nvarchar(30) NULL, 
-  LastName  nvarchar(30) NOT NULL, 
+  FirstName nvarchar(50) NULL, 
+  LastName  nvarchar(50) NOT NULL, 
   Phone     varchar(16) NULL, 
   PRIMARY KEY CLUSTERED (Id));
+CREATE TABLE NotificationError (
+  Id             int IDENTITY NOT NULL, 
+  NotificationId int NOT NULL, 
+  ErrorText      varchar(255) NULL, 
+  ErrorTime      datetime2(0) DEFAULT GetDate() NOT NULL, 
+  PRIMARY KEY CLUSTERED (Id));
+GO
+CREATE VIEW RolePermissions AS
+SELECT
+	RoleInfo.Id AS RoleId,
+	RoleInfo.Name AS RoleName,
+	RoleInfo.Description AS RoleDescription,
+	RoleInfoIncludePermission.PermissionId,
+	SetOfPermissionsIncludeRoleInfo.SetOfPermissionsId
+FROM
+	SetOfPermissionsIncludeRoleInfo INNER JOIN
+	RoleInfo ON SetOfPermissionsIncludeRoleInfo.RoleInfoId = RoleInfo.Id INNER JOIN
+	RoleInfoIncludePermission ON RoleInfo.Id = RoleInfoIncludePermission.RoleInfoId;
+GO
+CREATE VIEW AllPermissions AS
+SELECT
+  SetOfPermissionsId,
+  RoleId,
+  RoleName,
+  RoleDescription,
+  PermissionId
+FROM RolePermissions
+UNION ALL
+SELECT 
+  SetOfPermissionsId,
+  null RoleId,
+  null RoleName,
+  null RoleDescription,
+  PermissionId
+from SetOfPermissionsIncludePermission
+;
+GO
+CREATE VIEW DeptartmentsWithRecursive AS
+with DeptRecursive as (
+  select Id
+  , Name
+  , ParentDepartmentId
+  , 0 Recursive
+  from Department
+  where ParentDepartmentId is null
+  union all
+  select Department.Id
+  , Department.Name
+  , Department.ParentDepartmentId
+  , 0 Recursive
+  from Department
+  inner join DeptRecursive on Department.ParentDepartmentId = DeptRecursive.Id-- or Department.ParentDepartmentId = DeptRecursive.ParentDepartmentIdOfParent
+  --where ParentDepartmentId is not null
+  union all
+  select Department.Id
+  , Department.Name
+  , DeptRecursive.ParentDepartmentId
+  , 1 Recursive 
+  from Department
+  inner join DeptRecursive on Department.ParentDepartmentId = DeptRecursive.Id
+  )
+  select distinct *
+  from DeptRecursive;
+GO
+CREATE VIEW PersonInDeptPermission AS
+  select PersDept.PersonId
+  , PersDept.DepartmentId PersonDepartmentId
+  , PermDept.PermissionId
+  , PermDept.DepartmentId PermissionDepartmentId  
+  , PermDept.Recursive  
+  from PersonBelongToDepartment PersDept
+  join DeptartmentsWithRecursive DeptRec on DeptRec.Id = PersDept.DepartmentId
+  join PermissionToAccessADepartment PermDept on PermDept.DepartmentId = DeptRec.Id or (PermDept.Recursive = 1 and PermDept.DepartmentId = DeptRec.ParentDepartmentId);
+GO
+CREATE VIEW SetOfPermissionsHasAccessToPerson AS
+select AllPerm.SetOfPermissionsId
+, Perm.Id PermissionId
+, Perm.PermissionTypeId
+, Perm.IsActive PermissionIsActive
+, AllPerm.RoleId
+, AllPerm.RoleName
+, AllPerm.RoleDescription
+, PersDept.PermissionDepartmentId
+, PersDept.PersonDepartmentId
+, Person.Id PersonId
+, Person.FirstName
+, Person.LastName
+, Person.Phone
+-- Ищём всех людей, чтобы дать к ним доступ тем, у кого есть доступ КО ВСЕМ ЛЮДЯМ
+from Person
+-- Соединяем с каждым разрешением
+cross join Permission Perm 
+-- Добавляем тех, у кого есть доступ через отделы
+left join PersonInDeptPermission PersDept on Person.Id = PersDept.PersonId and Perm.Id = PersDept.PermissionId
+-- Добавляем тех, у кого есть доступ через человека
+left join PermissionToAccessAPerson PersToPers on Person.Id = PersToPers.PersonId and Perm.Id = PersToPers.PermissionId
+-- Добавляем наборы разрешений, в которые включены эти разрешения
+join AllPermissions AllPerm on AllPerm.PermissionId = Perm.Id
+-- Либо доступ есть через отдел
+where (PersDept.PermissionId is not null and Perm.PermissionTypeId = 'Dept') 
+-- Либо доступ есть через человека
+  or (PersToPers.PermissionId is not null and Perm.PermissionTypeId = 'Person') 
+-- Либо доступ есть ко всем людям
+  or Perm.PermissionTypeId = 'AllPeople';
+GO
+CREATE VIEW SetOfPermissionsHasActiveAccessToPerson AS
+select distinct SOP2P.SetOfPermissionsId
+, SOP.Name SetOfPermissionsName
+, SOP.PersonId PersonIdWithPermission
+, SOP2P.PersonId
+, FirstName
+, LastName
+, Phone
+from SetOfPermissionsHasAccessToPerson SOP2P
+join SetOfPermissions SOP on SOP.Id = SOP2P.SetOfPermissionsId
+where SOP2P.PermissionIsActive = 1 and SOP.IsActive = 1;
+GO
+CREATE VIEW NotificationChannelForPersonPass AS
+select P2P.PersonId
+, NotCh.Id NotificationChannelId
+from SetOfPermissionsHasActiveAccessToPerson P2P
+join NotificationChannel NotCh on NotCh.SetOfPermissionsId = P2P.SetOfPermissionsId
+where NotCh.IsActive = 1;
+GO
+CREATE VIEW PassStatistic AS
+with AllDays as (
+  select distinct Cast(PassDateTime as date) PassDate
+  from PassEvent
+)
+
+select Depts.Id DeptId
+, Depts.ParentDepartmentId
+, Depts.Recursive DeptRecursive
+, Depts.Name DeptName
+, AllDays.PassDate
+, Count(distinct PassEvent.PersonId) IncomedPeopleCount
+, Count(distinct PersDept.PersonId) AllPeopleCount
+, Cast(Round(100.0 * Count(distinct PassEvent.PersonId) / Count(distinct PersDept.PersonId), 0) as Int) IncomedPercent
+from Person
+join PersonBelongToDepartment PersDept on PersDept.PersonId = Person.Id 
+join DeptartmentsWithRecursive Depts on Depts.Id = PersDept.DepartmentId
+cross join AllDays
+left join PassEvent on PassEvent.PersonId = Person.Id and Cast(PassDateTime as date) = AllDays.PassDate
+left join PassType on PassEvent.PassTypeId = PassType.Id
+group by Depts.Id
+, Depts.ParentDepartmentId
+, Depts.Recursive
+, Depts.Name
+, AllDays.PassDate;
+GO
 CREATE INDEX Department_ParentDepartmentId 
   ON Department (ParentDepartmentId);
-CREATE INDEX NotificationChannel_PersonId 
-  ON NotificationChannel (PersonId);
+CREATE INDEX NotificationChannel_SetOfPermissionsId 
+  ON NotificationChannel (SetOfPermissionsId);
 CREATE INDEX SetOfPermissions_PersonId 
   ON SetOfPermissions (PersonId);
 CREATE INDEX PassEvent_PersonId 
@@ -134,10 +285,10 @@ CREATE INDEX PassEvent_PersonId
 CREATE UNIQUE NONCLUSTERED INDEX Person 
   ON Person (Phone) WHERE Phone IS NOT NULL;
 ALTER TABLE PermissionToAccessADepartment ADD CONSTRAINT FKPermission781867 FOREIGN KEY (PermissionId) REFERENCES Permission (Id);
-ALTER TABLE SetOfPermissionIncludeRoleInfo ADD CONSTRAINT FKSetOfPermi200389 FOREIGN KEY (SetOfPermissionsId) REFERENCES SetOfPermissions (Id);
+ALTER TABLE SetOfPermissionsIncludeRoleInfo ADD CONSTRAINT FKSetOfPermi691630 FOREIGN KEY (SetOfPermissionsId) REFERENCES SetOfPermissions (Id);
 ALTER TABLE RoleInfoIncludePermission ADD CONSTRAINT FKRoleInfoIn46240 FOREIGN KEY (PermissionId) REFERENCES Permission (Id);
-ALTER TABLE SetOfPermissionIncludePermission ADD CONSTRAINT FKSetOfPermi203895 FOREIGN KEY (SetOfPermissionsId) REFERENCES SetOfPermissions (Id);
-ALTER TABLE SetOfPermissionIncludePermission ADD CONSTRAINT FKSetOfPermi863100 FOREIGN KEY (PermissionId) REFERENCES Permission (Id);
+ALTER TABLE SetOfPermissionsIncludePermission ADD CONSTRAINT FKSetOfPermi657567 FOREIGN KEY (SetOfPermissionsId) REFERENCES SetOfPermissions (Id);
+ALTER TABLE SetOfPermissionsIncludePermission ADD CONSTRAINT FKSetOfPermi998361 FOREIGN KEY (PermissionId) REFERENCES Permission (Id);
 ALTER TABLE PersonBelongToDepartment ADD CONSTRAINT FKPersonBelo859937 FOREIGN KEY (PersonId) REFERENCES Person (Id);
 ALTER TABLE PersonBelongToDepartment ADD CONSTRAINT FKPersonBelo83296 FOREIGN KEY (DepartmentId) REFERENCES Department (Id);
 ALTER TABLE Card ADD CONSTRAINT PersonOfCard FOREIGN KEY (PersonId) REFERENCES Person (Id);
@@ -147,8 +298,7 @@ ALTER TABLE SetOfPermissions ADD CONSTRAINT PersonOfSetOfPermission FOREIGN KEY 
 ALTER TABLE PermissionToAccessADepartment ADD CONSTRAINT DepartmentOfPermission FOREIGN KEY (DepartmentId) REFERENCES Department (Id);
 ALTER TABLE PassEvent ADD CONSTRAINT SourceOfPassEvent FOREIGN KEY (PassSourceId) REFERENCES PassSource (Id);
 ALTER TABLE PassEvent ADD CONSTRAINT PersonOfPassEvent FOREIGN KEY (PersonId) REFERENCES Person (Id);
-ALTER TABLE NotificationChannel ADD CONSTRAINT PersonOfNotificationChannel FOREIGN KEY (PersonId) REFERENCES Person (Id);
-ALTER TABLE SetOfPermissionIncludeRoleInfo ADD CONSTRAINT FKSetOfPermi881879 FOREIGN KEY (RoleInfoId) REFERENCES RoleInfo (Id);
+ALTER TABLE SetOfPermissionsIncludeRoleInfo ADD CONSTRAINT FKSetOfPermi609361 FOREIGN KEY (RoleInfoId) REFERENCES RoleInfo (Id);
 ALTER TABLE RoleInfoIncludePermission ADD CONSTRAINT FKRoleInfoIn376823 FOREIGN KEY (RoleInfoId) REFERENCES RoleInfo (Id);
 ALTER TABLE PassEvent ADD CONSTRAINT TypeOfPassEvent FOREIGN KEY (PassTypeId) REFERENCES PassType (Id);
 ALTER TABLE Notification ADD CONSTRAINT StatusOfNotification FOREIGN KEY (NotificationStatusId) REFERENCES NotificationStatus (Id);
@@ -159,6 +309,41 @@ ALTER TABLE Notification ADD CONSTRAINT ChannelOfNotification FOREIGN KEY (Notif
 ALTER TABLE NotificationChannel ADD CONSTRAINT TypeOfNotificationChannel FOREIGN KEY (NotificationChannelTypeId) REFERENCES NotificationChannelType (Id);
 ALTER TABLE PermissionToAccessAPerson ADD CONSTRAINT FKPermission795882 FOREIGN KEY (PermissionId) REFERENCES Permission (Id);
 ALTER TABLE PermissionToAccessAPerson ADD CONSTRAINT PersonOfPermission FOREIGN KEY (PersonId) REFERENCES Person (Id);
+ALTER TABLE NotificationChannel ADD CONSTRAINT FKNotificati678673 FOREIGN KEY (SetOfPermissionsId) REFERENCES SetOfPermissions (Id);
+ALTER TABLE NotificationError ADD CONSTRAINT FKNotificati393333 FOREIGN KEY (NotificationId) REFERENCES Notification (Id);
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'FillPassEventForPerson') AND type in (N'P', N'PC')) DROP PROCEDURE FillPassEventForPerson;
+GO
+CREATE PROCEDURE FillPassEventForPerson @PersonId int, @PassSourceId int, @DaysCount int
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON
+
+	Declare @DaysInserted int = 0
+	while @DaysInserted < @DaysCount
+	begin
+	  insert into PassEvent (PersonId
+	  , PassSourceId
+	  , PassTypeId
+	  , PassDateTime
+	  )
+	  values (@PersonId, @PassSourceId, 'SuccIn', DateAdd(hour, 8, cast(DateAdd(day, -@DaysInserted, cast(GetDate() as Date)) as datetime)))
+	  , (@PersonId, @PassSourceId, 'SuccOut', DateAdd(hour, 14, cast(DateAdd(day, -@DaysInserted, cast(GetDate() as Date)) as datetime)))
+	  Set @DaysInserted = @DaysInserted + 1
+	end
+END;
+GO
+IF EXISTS (SELECT * FROM sys.triggers WHERE object_id = OBJECT_ID(N'NotificationStatusUpdateTrigger')) DROP TRIGGER NotificationStatusUpdateTrigger;
+GO
+create trigger NotificationStatusUpdateTrigger on Notification after insert, update as
+begin
+  update Notification
+  set StatusUpdateTime = GetDate()
+  from Notification
+  join inserted on Notification.Id = inserted.Id
+end;
+GO
 SET IDENTITY_INSERT Person ON;
 INSERT INTO Person(Id, FirstName, LastName, Phone) VALUES (1, 'Андрей', 'Админородящий', '+79998887766');
 INSERT INTO Person(Id, FirstName, LastName, Phone) VALUES (2, 'Анна Ивановна', 'Обучающая', '+79876543219');
@@ -176,13 +361,16 @@ INSERT INTO PermissionType(Id, Name, Description) VALUES ('AddPeople', 'Внес
 INSERT INTO PermissionType(Id, Name, Description) VALUES ('AddDepts', 'Внесение новых отделов', null);
 INSERT INTO PermissionType(Id, Name, Description) VALUES ('GrantPerson', 'Предоставление доступа', 'Предоставление человеку доступа к другому человеку, к которому у самого есть доступ через отдел');
 SET IDENTITY_INSERT Department ON;
-INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (1, 'Персонал школы', null);
+INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (1, 'Школа', null);
 INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (2, 'Учителя', 1);
-INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (3, 'Ученики', null);
-INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (4, 'Родители', null);
+INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (3, 'Ученики', 1);
+INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (4, 'Родители', 1);
 INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (5, '7 классы', 3);
 INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (6, '7Б', 5);
 INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (7, 'Кружок рисования', 3);
+INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (8, '11 классы', 3);
+INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (9, '11А', 8);
+INSERT INTO Department(Id, Name, ParentDepartmentId) VALUES (10, '11Б', 8);
 SET IDENTITY_INSERT Department OFF;
 INSERT INTO PersonBelongToDepartment(PersonId, DepartmentId) VALUES (1, 1);
 INSERT INTO PersonBelongToDepartment(PersonId, DepartmentId) VALUES (1, 4);
@@ -193,15 +381,16 @@ INSERT INTO NotificationChannelType(Id, Name, Description) VALUES ('SMS', 'СМ�
 INSERT INTO NotificationChannelType(Id, Name, Description) VALUES ('Push', 'Push', 'Оповещение через Push-сообщение');
 INSERT INTO NotificationChannelType(Id, Name, Description) VALUES ('EMail', 'EMail', 'Оповещение через сообщение на электронную почту');
 INSERT INTO NotificationChannelType(Id, Name, Description) VALUES ('Telegram', 'Telegram', 'Оповещение через сообщение в Telegram');
-SET IDENTITY_INSERT NotificationChannel ON;
-INSERT INTO NotificationChannel(Id, NotificationChannelTypeId, PersonId, IsActive, ChannelParams) VALUES (1, 'EMail', 1, 1, 'Parent@mail.ru');
-SET IDENTITY_INSERT NotificationChannel OFF;
+INSERT INTO NotificationChannelType(Id, Name, Description) VALUES ('CallBack', 'CallBack', 'Оповещение в приложении');
 SET IDENTITY_INSERT SetOfPermissions ON;
 INSERT INTO SetOfPermissions(Id, PersonId, Name, IsActive) VALUES (1, 1, 'Администратор', 1);
 INSERT INTO SetOfPermissions(Id, PersonId, Name, IsActive) VALUES (2, 1, 'Родитель', 1);
 INSERT INTO SetOfPermissions(Id, PersonId, Name, IsActive) VALUES (3, 2, 'Учитель', 1);
 INSERT INTO SetOfPermissions(Id, PersonId, Name, IsActive) VALUES (4, 4, 'Надзиратель', 1);
 SET IDENTITY_INSERT SetOfPermissions OFF;
+INSERT INTO SetOfPermissionsIncludeRoleInfo(RoleInfoId, SetOfPermissionsId) VALUES ('Admin', 1);
+INSERT INTO SetOfPermissionsIncludeRoleInfo(RoleInfoId, SetOfPermissionsId) VALUES ('Registrar', 3);
+INSERT INTO SetOfPermissionsIncludeRoleInfo(RoleInfoId, SetOfPermissionsId) VALUES ('PassSource', 4);
 SET IDENTITY_INSERT Permission ON;
 INSERT INTO Permission(Id, IsActive, PermissionTypeId) VALUES (1, 1, 'AllPeople');
 INSERT INTO Permission(Id, IsActive, PermissionTypeId) VALUES (2, 1, 'AllDepts');
@@ -211,8 +400,8 @@ INSERT INTO Permission(Id, IsActive, PermissionTypeId) VALUES (5, 1, 'GrantPerso
 INSERT INTO Permission(Id, IsActive, PermissionTypeId) VALUES (6, 1, 'Person');
 INSERT INTO Permission(Id, IsActive, PermissionTypeId) VALUES (7, 1, 'Dept');
 SET IDENTITY_INSERT Permission OFF;
-INSERT INTO SetOfPermissionIncludePermission(PermissionId, SetOfPermissionsId) VALUES (6, 2);
-INSERT INTO SetOfPermissionIncludePermission(PermissionId, SetOfPermissionsId) VALUES (7, 3);
+INSERT INTO SetOfPermissionsIncludePermission(PermissionId, SetOfPermissionsId) VALUES (6, 2);
+INSERT INTO SetOfPermissionsIncludePermission(PermissionId, SetOfPermissionsId) VALUES (7, 3);
 INSERT INTO RoleInfoIncludePermission(PermissionId, RoleInfoId) VALUES (1, 'Admin');
 INSERT INTO RoleInfoIncludePermission(PermissionId, RoleInfoId) VALUES (2, 'Admin');
 INSERT INTO RoleInfoIncludePermission(PermissionId, RoleInfoId) VALUES (3, 'Admin');
@@ -223,7 +412,7 @@ INSERT INTO RoleInfoIncludePermission(PermissionId, RoleInfoId) VALUES (2, 'Pass
 INSERT INTO RoleInfoIncludePermission(PermissionId, RoleInfoId) VALUES (3, 'Registrar');
 INSERT INTO RoleInfoIncludePermission(PermissionId, RoleInfoId) VALUES (5, 'Registrar');
 INSERT INTO PermissionToAccessAPerson(PersonId, PermissionId) VALUES (3, 6);
-INSERT INTO PermissionToAccessADepartment(DepartmentId, PermissionId, Recursive) VALUES (6, 7, 1);
+INSERT INTO PermissionToAccessADepartment(DepartmentId, PermissionId, Recursive) VALUES (3, 7, 1);
 INSERT INTO PassType(Id, Name, Description) VALUES ('SuccIn', 'Успешный вход', null);
 INSERT INTO PassType(Id, Name, Description) VALUES ('SuccOut', 'Успешный выход', null);
 INSERT INTO PassType(Id, Name, Description) VALUES ('AbortIn', 'Незавершённый вход', null);
@@ -243,6 +432,9 @@ INSERT INTO UserInfo(PersonId, UserLogin, UserPassword, IsActive) VALUES (4, 'Ga
 INSERT INTO NotificationStatus(Id, Name, Description) VALUES ('Waiting', 'Ожидает отправки', 'Оповещение ожидает отправки');
 INSERT INTO NotificationStatus(Id, Name, Description) VALUES ('Sent', 'Отправлено', 'Оповещение отправлено');
 INSERT INTO NotificationStatus(Id, Name, Description) VALUES ('Error', 'Ошибка', 'При отправке оповещения произошла ошибка');
-INSERT INTO SetOfPermissionIncludeRoleInfo(RoleInfoId, SetOfPermissionsId) VALUES ('Admin', 1);
-INSERT INTO SetOfPermissionIncludeRoleInfo(RoleInfoId, SetOfPermissionsId) VALUES ('Registrar', 3);
-INSERT INTO SetOfPermissionIncludeRoleInfo(RoleInfoId, SetOfPermissionsId) VALUES ('PassSource', 4);
+INSERT INTO NotificationStatus(Id, Name, Description) VALUES ('Ignore', 'Игнорировать', 'Больше не пытаться отправить');
+SET IDENTITY_INSERT NotificationChannel ON;
+INSERT INTO NotificationChannel(Id, NotificationChannelTypeId, SetOfPermissionsId, IsActive, ChannelParams) VALUES (1, 'EMail', 2, 1, 'Parent@mail.ru');
+INSERT INTO NotificationChannel(Id, NotificationChannelTypeId, SetOfPermissionsId, IsActive, ChannelParams) VALUES (2, 'CallBack', 4, 1, 'CallbackId:12345');
+INSERT INTO NotificationChannel(Id, NotificationChannelTypeId, SetOfPermissionsId, IsActive, ChannelParams) VALUES (3, 'CallBack', 1, 1, 'CallbackId:54321');
+SET IDENTITY_INSERT NotificationChannel OFF;
